@@ -9,6 +9,8 @@ window.maidsafeDemo.factory('nfsFactory', [ function(Shared) {
     APP: 'app',
     DRIVE: 'drive'
   };
+  var fs = require('fs');
+  var request = require('request');
 
   // create new directory
   self.createDir = function(dirPath, isPrivate, userMetadata, isPathShared, callback) {
@@ -88,10 +90,10 @@ window.maidsafeDemo.factory('nfsFactory', [ function(Shared) {
     var self = this;
     var rootPath = isPathShared ? ROOT_PATH.DRIVE : ROOT_PATH.APP;
     var url = this.SERVER + 'nfs/file/' + rootPath + '/' + filePath;
-    var fileStream = require('fs').createReadStream(localPath).on('data', function(chunk) {
+    var fileStream = fs.createReadStream(localPath).on('data', function(chunk) {
       callback(null, chunk.length);
     });
-    fileStream.pipe(require('request').put(url, {
+    fileStream.pipe(request.put(url, {
       headers: {
         'Content-Type': mime.lookup(filePath),
         'Range': 'Bytes=' + offset + '-'
@@ -104,18 +106,22 @@ window.maidsafeDemo.factory('nfsFactory', [ function(Shared) {
     }));
   };
 
-  self.getFile = function(filePath, isPathShared, offset, length, callback) {
+  self.getFile = function(filePath, isPathShared, downloadPath, callback) {
     var rootPath = isPathShared ? ROOT_PATH.DRIVE : ROOT_PATH.APP;
     var url = this.SERVER + 'nfs/file/' + rootPath + '/' + filePath;
-    var payload = {
-      url: url,
-      method: 'GET',
-      headers: {
-        authorization: 'Bearer ' + this.getAuthToken(),
-        range: 'bytes=' + offset + '-' + (offset + length)
+    var headers = {
+      auth: {
+      'bearer': this.getAuthToken()
       }
     };
-    (new this.Request(payload, callback)).send();
+    request.get(url, headers)
+    .on('data', function(d) {
+      callback(null, d.length);
+    })
+    .on('error', function(err){
+      console.error(err);
+    })
+    .pipe(fs.createWriteStream(downloadPath));
   };
 
   var rename = function(path, isPathShared, newName, isFile, callback) {
